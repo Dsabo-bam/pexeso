@@ -35,7 +35,9 @@ except:
     button_font = pygame.font.SysFont(None, 36)
     info_font = pygame.font.SysFont(None, 30)
 
-# Difficulty settings with text-based cards
+# Difficulty
+
+
 difficulties = {
     "easy": {"rows": 4, "cols": 2, "values": ['A', 'A', 'B', 'B', 'C', 'C', 'D', 'D']},
     "medium": {"rows": 4, "cols": 4, "values": ['A', 'A', 'B', 'B', 'C', 'C', 'D', 'D', 'E', 'E', 'F', 'F', 'G', 'G', 'H', 'H']},
@@ -161,20 +163,31 @@ async def main():
                                     first_card = card_index
                                 elif second_card is None and first_card != card_index:
                                     second_card = card_index
-                                    player1_moves += 1
+                                    # Increment moves for the current player only when a pair is selected
+                                    if game_mode == "multi":
+                                        if current_player == 1:
+                                            player1_moves += 1
+                                        else:
+                                            player2_moves += 1
+                                    else:
+                                        player1_moves += 1
                                     if cards[first_card]['value'] == cards[second_card]['value']:
                                         cards[first_card]['matched'] = True
                                         cards[second_card]['matched'] = True
                                         matches_found += 1
-                                        player1_score += 1
+                                        if game_mode == "multi":
+                                            if current_player == 1:
+                                                player1_score += 1
+                                            else:
+                                                player2_score += 1
+                                        else:
+                                            player1_score += 1
                                         first_card, second_card = None, None
                                     else:
                                         waiting = True
                                         wait_start = pygame.time.get_ticks()
                                         if game_mode == "multi":
                                             current_player = 3 - current_player
-                                            if current_player == 2:
-                                                player2_moves += 1
                 elif game_over:
                     restart_rect = restart_surface.get_rect(center=(width // 2, height // 2 + 100))
                     menu_rect = menu_surface.get_rect(center=(width // 2, height // 2 + 200))
@@ -214,10 +227,22 @@ async def main():
                 button_rect = text_rect.inflate(60, 40)
                 if button_rect.collidepoint(mouse_x, mouse_y):
                     hover_button = button["text"]
+                    # Only apply hover effect if the button is not selected
                     if button.get("action") in ["start", "exit"]:
                         button["color"] = HOVER_YELLOW
-                    elif button.get("mode") != game_mode or button.get("difficulty") != difficulty:
+                    elif (button.get("mode") and button["mode"] != game_mode) or (button.get("difficulty") and button["difficulty"] != difficulty):
                         button["color"] = HOVER_BLUE
+                    # Ensure selected buttons stay HOVER_YELLOW
+                    elif (button.get("mode") and button["mode"] == game_mode) or (button.get("difficulty") and button["difficulty"] == difficulty):
+                        button["color"] = HOVER_YELLOW
+                else:
+                    # Reset color for non-hovered buttons, keeping selected ones in HOVER_YELLOW
+                    if button.get("action") in ["start", "exit"]:
+                        button["color"] = YELLOW
+                    elif (button.get("mode") and button["mode"] == game_mode) or (button.get("difficulty") and button["difficulty"] == difficulty):
+                        button["color"] = HOVER_YELLOW
+                    else:
+                        button["color"] = GRAY
         else:
             restart_rect = restart_surface.get_rect(center=(width // 2, height // 2 + 100))
             menu_rect = menu_surface.get_rect(center=(width // 2, height // 2 + 200))
