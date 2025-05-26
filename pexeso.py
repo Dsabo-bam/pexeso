@@ -4,353 +4,466 @@ import pygame
 import random
 import math
 
-# Initialize Pygame
+# -----------------------
+# Inicializácia Pygame + Mixer
+# -----------------------
 pygame.init()
+pygame.mixer.init()
 
-# Window settings
+# -----------------------
+# Načítanie zvukov
+# -----------------------
+# Vyžaduje priečinok `sounds/` v rovnakej zložke ako tento skript:
+# sounds/
+#   ├─ background.mp3
+#   ├─ flip.wav
+#   ├─ game_over.wav
+#   ├─ button_click.wav      ← nový efekt pre klik na tlačidlo
+#   └─ match.wav             ← nový efekt pre správny pár
+pygame.mixer.music.load("sounds/background.mp3")
+pygame.mixer.music.set_volume(0.5)
+pygame.mixer.music.play(-1)
+
+flip_sound       = pygame.mixer.Sound("sounds/flip.wav")
+game_over_sound = pygame.mixer.Sound("sounds/game_over.wav")
+button_sound     = pygame.mixer.Sound("sounds/button_click.wav")
+match_sound      = pygame.mixer.Sound("sounds/match.wav")
+for s in (flip_sound, game_over_sound, button_sound, match_sound):
+    s.set_volume(0.5)
+
+# -----------------------
+# Nastavenie okna
+# -----------------------
 width, height = 1200, 800
 screen = pygame.display.set_mode((width, height))
 pygame.display.set_caption("Pexeso")
 
-# Colors
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-GRAY = (180, 180, 180)
-DARK_GRAY = (100, 100, 100)
-BLUE = (100, 150, 200)
-HOVER_BLUE = (120, 180, 240)
-YELLOW = (240, 200, 100)
-HOVER_YELLOW = (255, 220, 120)
+# -----------------------
+# Farby
+# -----------------------
+WHITE         = (255, 255, 255)
+BLACK         = (0,   0,   0)
+GRAY          = (180, 180, 180)
+DARK_GRAY     = (100, 100, 100)
+BLUE          = (100, 150, 200)
+YELLOW        = (240, 200, 100)
 PASTEL_PURPLE = (180, 150, 200)
-PASTEL_PINK = (220, 160, 180)
-GLOW_COLOR = (255, 255, 255, 50)  # Semi-transparent white for glow
+PASTEL_PINK   = (220, 160, 180)
+GREEN         = (100, 200, 150)
+RED           = (200, 100, 100)
 
-# Fonts
-try:
-    title_font = pygame.font.SysFont("arial,helvetica,sans", 90, bold=True)
-    button_font = pygame.font.SysFont("arial,helvetica,sans", 36, bold=True)
-    info_font = pygame.font.SysFont("arial,helvetica,sans", 30)
-except:
-    title_font = pygame.font.SysFont(None, 90)
-    button_font = pygame.font.SysFont(None, 36)
-    info_font = pygame.font.SysFont(None, 30)
-
-# Difficulty
-
-
-difficulties = {
-    "easy": {"rows": 4, "cols": 2, "values": ['A', 'A', 'B', 'B', 'C', 'C', 'D', 'D']},
-    "medium": {"rows": 4, "cols": 4, "values": ['A', 'A', 'B', 'B', 'C', 'C', 'D', 'D', 'E', 'E', 'F', 'F', 'G', 'G', 'H', 'H']},
-    "hard": {"rows": 6, "cols": 4, "values": ['A', 'A', 'B', 'B', 'C', 'C', 'D', 'D', 'E', 'E', 'F', 'F', 'G', 'G', 'H', 'H', 'I', 'I', 'J', 'J', 'K', 'K', 'L', 'L']}
+# -----------------------
+# Nastavenia (Settings)
+# -----------------------
+settings_data = {
+    "background_color": None,  # None = gradient
+    "sound": True,             # zap/vyp
+    "volume": 0.5,             # 0.0–1.0
 }
 
-# Menu buttons
-buttons = [
-    {"text": "1 Hráč", "y": 200, "mode": "single", "color": GRAY},
-    {"text": "2 Hráči", "y": 280, "mode": "multi", "color": GRAY},
-    {"text": "Ľahká", "y": 380, "difficulty": "easy", "color": GRAY},
-    {"text": "Stredná", "y": 460, "difficulty": "medium", "color": GRAY},
-    {"text": "Ťažká", "y": 540, "difficulty": "hard", "color": GRAY},
-    {"text": "Štart", "y": 640, "action": "start", "color": YELLOW},
-    {"text": "Koniec", "y": 720, "action": "exit", "color": YELLOW}
+# -----------------------
+# Kontrastné schémy pre každé pozadie
+# -----------------------
+color_schemes = {
+    None:        {"card_back": BLUE,         "card_front": BLACK, "button": YELLOW},
+    GRAY:        {"card_back": PASTEL_PURPLE,"card_front": BLACK, "button": BLUE},
+    BLUE:        {"card_back": DARK_GRAY,    "card_front": WHITE, "button": YELLOW},
+    PASTEL_PINK: {"card_back": GREEN,        "card_front": BLACK, "button": RED},
+}
+
+# -----------------------
+# Možnosti farieb pozadia
+# -----------------------
+bg_options = [
+    ("Predvolené", None),
+    ("Sivá",       GRAY),
+    ("Modrá",      BLUE),
+    ("Ružová",     PASTEL_PINK),
 ]
 
-# Precompute background gradient
-background_surface = pygame.Surface((width, height), pygame.SRCALPHA)
-for r in range(max(width, height), 0, -5):
-    alpha = r / max(width, height)
-    color = (
-        int(PASTEL_PURPLE[0] * alpha + PASTEL_PINK[0] * (1 - alpha)),
-        int(PASTEL_PURPLE[1] * alpha + PASTEL_PINK[1] * (1 - alpha)),
-        int(PASTEL_PURPLE[2] * alpha + PASTEL_PINK[2] * (1 - alpha))
-    )
-    pygame.draw.circle(background_surface, color, (width // 2, height // 2), r)
+# -----------------------
+# Fonty
+# -----------------------
+try:
+    title_font    = pygame.font.SysFont("arial,helvetica,sans", 90, bold=True)
+    subtitle_font = pygame.font.SysFont("arial,helvetica,sans", 60, bold=True)
+    button_font   = pygame.font.SysFont("arial,helvetica,sans", 36, bold=True)
+    info_font     = pygame.font.SysFont("arial,helvetica,sans", 30)
+except:
+    title_font    = pygame.font.SysFont(None, 90)
+    subtitle_font = pygame.font.SysFont(None, 60)
+    button_font   = pygame.font.SysFont(None, 36)
+    info_font     = pygame.font.SysFont(None, 30)
 
-# Cache text surfaces
-title_surface = title_font.render("Pexeso", True, WHITE)
+# -----------------------
+# Gradient pozadia
+# -----------------------
+def draw_gradient():
+    bg = pygame.Surface((width, height), pygame.SRCALPHA)
+    for r in range(max(width, height), 0, -5):
+        a = r / max(width, height)
+        col = (
+            int(PASTEL_PURPLE[0]*a + PASTEL_PINK[0]*(1-a)),
+            int(PASTEL_PURPLE[1]*a + PASTEL_PINK[1]*(1-a)),
+            int(PASTEL_PURPLE[2]*a + PASTEL_PINK[2]*(1-a))
+        )
+        pygame.draw.circle(bg, col, (width//2, height//2), r)
+    screen.blit(bg, (0, 0))
+
+# -----------------------
+# Výber obtiažnosti
+# -----------------------
+difficulties = {
+    "easy":   {"rows": 4, "cols": 2, "values": list("AABBCCDD")},
+    "medium": {"rows": 4, "cols": 4, "values": list("AABBCCDDEEFFGGHH")},
+    "hard":   {"rows": 6, "cols": 4, "values": list("AABBCCDDEEFFGGHHIIJJKKLL")},
+}
+def init_game(settings):
+    rows, cols = settings["rows"], settings["cols"]
+    vals = settings["values"].copy()
+    random.shuffle(vals)
+    cards = [{
+        "value": vals[i],
+        "revealed": False,
+        "matched": False,
+        "flip_progress": 0.0
+    } for i in range(rows * cols)]
+    size, margin = 120, 15
+    grid_w = cols * (size + margin) - margin
+    grid_h = rows * (size + margin) - margin
+    gx = (width - grid_w) // 2
+    gy = (height - grid_h) // 2
+    return cards, rows, cols, size, margin, gx, gy
+
+# -----------------------
+# Pred-render písmená
+# -----------------------
+card_surfs = {chr(i): info_font.render(chr(i), True, WHITE) for i in range(65, 91)}
+
+# -----------------------
+# Kreslenie tlačidla
+# -----------------------
+def draw_button(text, color, center=None, corner=None, inflate=(200,50), pulse=1.0):
+    surf = button_font.render(text, True, WHITE)
+    rect = surf.get_rect(bottomright=corner) if corner else surf.get_rect(center=center)
+    btn = rect.inflate(inflate[0]*pulse, inflate[1]*pulse)
+    pygame.draw.rect(screen, DARK_GRAY, (btn.left+5, btn.top+5, btn.width, btn.height), border_radius=15)
+    pygame.draw.rect(screen, color, btn, border_radius=15)
+    screen.blit(surf, rect)
+    return btn
+
+# -----------------------
+# Titulok + Nastavenia ikona
+# -----------------------
+title_surf   = title_font.render("Pexeso", True, WHITE)
 title_shadow = title_font.render("Pexeso", True, DARK_GRAY)
-title_rect = title_surface.get_rect(center=(width // 2, 100))
-button_surfaces = {btn["text"]: button_font.render(btn["text"], True, WHITE) for btn in buttons}
-restart_surface = button_font.render("Reštart", True, WHITE)
-menu_surface = button_font.render("Menu", True, WHITE)
+title_rect   = title_surf.get_rect(center=(width//2, 100))
 
-def init_game(difficulty_settings):
-    rows, cols = difficulty_settings["rows"], difficulty_settings["cols"]
-    values = difficulty_settings["values"].copy()
-    random.shuffle(values)
-    cards = [{'value': values[i], 'revealed': False, 'matched': False, 'flip_progress': 0.0} for i in range(rows * cols)]
-    card_size = 120
-    card_margin = 15
-    grid_width = cols * (card_size + card_margin) - card_margin
-    grid_height = rows * (card_size + card_margin) - card_margin
-    grid_x = (width - grid_width) // 2
-    grid_y = (height - grid_height) // 2
-    return cards, rows, cols, card_size, card_margin, grid_x, grid_y
+settings_circle_center = (100, 100)
+settings_circle_radius = 30
+settings_label    = subtitle_font.render("Nastavenia", True, WHITE)
+settings_label_sh = subtitle_font.render("Nastavenia", True, DARK_GRAY)
 
+# -----------------------
+# Hlavná slučka
+# -----------------------
 async def main():
-    # Game variables
-    menu = True
-    difficulty = None
-    game_mode = "multi"  # Default to multiplayer
-    cards = []
-    rows, cols = 0, 0
-    card_size, card_margin = 0, 15
-    grid_x, grid_y = 0, 0
-    first_card, second_card = None, None
-    waiting, wait_time, wait_start = False, 1000, 0
-    player1_score, player2_score = 0, 0
-    player1_moves, player2_moves = 0, 0
-    current_player = 1
-    matches_found = 0
-    game_over = False
-    game_initialized = False
-    start_time = 0
-    pulse_time = 0
-    FPS = 60
-    clock = pygame.time.Clock()
+    state = "main"  # main, submenu, game, settings
+    game_mode = difficulty = None
 
-    # Cache card surfaces
-    card_surfaces = {chr(i): info_font.render(chr(i), True, WHITE) for i in range(65, 91)}  # A-Z
+    cards = []; rows = cols = 0
+    size = margin = 0; gx = gy = 0
+    first = second = None
+    waiting = False; wait_ms = 1000; wait_start = 0
+    p1_score = p2_score = p1_moves = p2_moves = 0
+    current = 1; matches = 0
+    game_over = False; winner = ""
+    game_started = False; start_time = 0
+
+    FPS = 144
+    clock = pygame.time.Clock()
+    pulse_time = 0
+
+    # Rect-y tlačidiel
+    start_btn = play_btn = None
+    player_btns = diff_btns = []
+    bg_option_btns = []; sound_btn = back_btn = None
+    menu_during_btn = None
 
     while True:
-        mouse_x, mouse_y = pygame.mouse.get_pos()
+        mx, my = pygame.mouse.get_pos()
         pulse_time += 0.1
-        pulse_scale = 1 + 0.05 * math.sin(pulse_time)
+        pulse = 1 + 0.05 * math.sin(pulse_time)
 
+        # Slider pre hlasitosť
+        slider_x = width//2 - 150
+        slider_y = 220 + len(bg_options)*80 + 80
+        slider_w = 300; slider_h = 5; knob_r = 10
+        slider_rect = pygame.Rect(slider_x, slider_y, slider_w, slider_h)
+        slider_area = slider_rect.inflate(knob_r*2, knob_r*2)
+
+        # vyber schémy
+        scheme = color_schemes[settings_data["background_color"]]
+        card_back_col  = scheme["card_back"]
+        card_front_col = scheme["card_front"]
+        btn_col        = scheme["button"]
+
+        # --- EVENT LOOP ---
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                if menu:
-                    for button in buttons:
-                        text_rect = button_surfaces[button["text"]].get_rect(center=(width // 2, button["y"]))
-                        button_rect = text_rect.inflate(60, 40)
-                        if button_rect.collidepoint(mouse_x, mouse_y):
-                            if button.get("mode"):
-                                game_mode = button["mode"]
-                                for btn in buttons:
-                                    if btn.get("mode"):
-                                        btn["color"] = HOVER_YELLOW if btn["mode"] == game_mode else GRAY
-                            elif button.get("difficulty"):
-                                difficulty = button["difficulty"]
-                                for btn in buttons:
-                                    if btn.get("difficulty"):
-                                        btn["color"] = HOVER_YELLOW if btn["difficulty"] == difficulty else GRAY
-                            elif button["action"] == "start" and difficulty:
-                                menu = False
-                                cards, rows, cols, card_size, card_margin, grid_x, grid_y = init_game(difficulties[difficulty])
-                                game_initialized = True
-                                player1_score, player2_score = 0, 0
-                                player1_moves, player2_moves = 0, 0
-                                matches_found = 0
-                                current_player = 1
-                                start_time = pygame.time.get_ticks()
-                            elif button["action"] == "exit":
-                                return
-                elif not waiting and not game_over and game_initialized:
+
+            # ťahom myšou na slider
+            if state == "settings" and event.type == pygame.MOUSEMOTION and event.buttons[0]:
+                if slider_area.collidepoint(event.pos):
+                    rel = (event.pos[0] - slider_x)/slider_w
+                    settings_data["volume"] = max(0, min(1, rel))
+                    for s in (flip_sound, game_over_sound, button_sound, match_sound):
+                        s.set_volume(settings_data["volume"])
+                    pygame.mixer.music.set_volume(settings_data["volume"])
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                # Nastavenia ikona (len mimo hry)
+                if state != "game":
+                    dx = mx - settings_circle_center[0]
+                    dy = my - settings_circle_center[1]
+                    rect_txt = settings_label.get_rect(midleft=(
+                        settings_circle_center[0]+settings_circle_radius+10,
+                        settings_circle_center[1]
+                    ))
+                    if math.hypot(dx, dy) <= settings_circle_radius or rect_txt.collidepoint(mx, my):
+                        if settings_data["sound"]: button_sound.play()
+                        state = "settings"
+                        continue
+
+                # MENU počas hry
+                if state == "game" and menu_during_btn and menu_during_btn.collidepoint(mx, my):
+                    if settings_data["sound"]: button_sound.play()
+                    state = "main"
+                    game_mode = difficulty = None
+                    game_started = False
+                    continue
+
+                # Main → Submenu
+                if state == "main" and start_btn and start_btn.collidepoint(mx, my):
+                    if settings_data["sound"]: button_sound.play()
+                    state = "submenu"
+
+                # Submenu → Game
+                elif state == "submenu":
+                    for i, btn in enumerate(player_btns):
+                        if btn.collidepoint(mx, my):
+                            if settings_data["sound"]: button_sound.play()
+                            game_mode = ["single", "multi"][i]
+                    for i, btn in enumerate(diff_btns):
+                        if btn.collidepoint(mx, my):
+                            if settings_data["sound"]: button_sound.play()
+                            difficulty = ["easy", "medium", "hard"][i]
+                    if play_btn and play_btn.collidepoint(mx, my) and game_mode and difficulty:
+                        if settings_data["sound"]: button_sound.play()
+                        cards, rows, cols, size, margin, gx, gy = init_game(difficulties[difficulty])
+                        p1_score = p2_score = p1_moves = p2_moves = 0
+                        current = 1; matches = 0
+                        first = second = None
+                        waiting = False; game_over = False
+                        game_started = True; start_time = pygame.time.get_ticks()
+                        state = "game"
+
+                # Settings → Main
+                elif state == "settings":
+                    if sound_btn and sound_btn.collidepoint(mx, my):
+                        settings_data["sound"] = not settings_data["sound"]
+                        if settings_data["sound"]:
+                            pygame.mixer.music.unpause()
+                        else:
+                            pygame.mixer.music.pause()
+                        if settings_data["sound"]: button_sound.play()
+                    if slider_area.collidepoint(mx, my):
+                        rel = (mx - slider_x)/slider_w
+                        settings_data["volume"] = max(0, min(1, rel))
+                        for s in (flip_sound, game_over_sound, button_sound, match_sound):
+                            s.set_volume(settings_data["volume"])
+                        pygame.mixer.music.set_volume(settings_data["volume"])
+                    for i, btn in enumerate(bg_option_btns):
+                        if btn.collidepoint(mx, my):
+                            if settings_data["sound"]: button_sound.play()
+                            settings_data["background_color"] = bg_options[i][1]
+                    if back_btn and back_btn.collidepoint(mx, my):
+                        if settings_data["sound"]: button_sound.play()
+                        state = "main"
+                        game_mode = difficulty = None
+
+                # Hra – klik na kartu
+                elif state == "game" and game_started and not waiting and not game_over:
                     for i in range(rows):
                         for j in range(cols):
-                            card_index = i * cols + j
-                            card = cards[card_index]
-                            if card['matched'] or card['revealed']:
+                            idx = i*cols + j
+                            c   = cards[idx]
+                            if c["matched"] or c["revealed"]:
                                 continue
-                            x = grid_x + j * (card_size + card_margin)
-                            y = grid_y + i * (card_size + card_margin)
-                            if x <= mouse_x <= x + card_size and y <= mouse_y <= y + card_size:
-                                card['revealed'] = True
-                                card['flip_progress'] = 1.0
-                                if first_card is None:
-                                    first_card = card_index
-                                elif second_card is None and first_card != card_index:
-                                    second_card = card_index
-                                    # Increment moves for the current player only when a pair is selected
-                                    if game_mode == "multi":
-                                        if current_player == 1:
-                                            player1_moves += 1
-                                        else:
-                                            player2_moves += 1
+                            x = gx + j*(size+margin)
+                            y = gy + i*(size+margin)
+                            if x <= mx <= x+size and y <= my <= y+size:
+                                c["revealed"] = True
+                                c["flip_progress"] = 1.0
+                                if settings_data["sound"]: flip_sound.play()
+                                if first is None:
+                                    first = idx
+                                elif second is None and first != idx:
+                                    second = idx
+                                    if game_mode=="multi":
+                                        if current==1: p1_moves+=1
+                                        else:          p2_moves+=1
                                     else:
-                                        player1_moves += 1
-                                    if cards[first_card]['value'] == cards[second_card]['value']:
-                                        cards[first_card]['matched'] = True
-                                        cards[second_card]['matched'] = True
-                                        matches_found += 1
-                                        if game_mode == "multi":
-                                            if current_player == 1:
-                                                player1_score += 1
-                                            else:
-                                                player2_score += 1
+                                        p1_moves+=1
+                                    if cards[first]["value"]==cards[second]["value"]:
+                                        cards[first]["matched"]=cards[second]["matched"]=True
+                                        matches += 1
+                                        if settings_data["sound"]: match_sound.play()
+                                        if game_mode=="multi":
+                                            if current==1: p1_score+=1
+                                            else:          p2_score+=1
                                         else:
-                                            player1_score += 1
-                                        first_card, second_card = None, None
+                                            p1_score+=1
+                                        first=second=None
                                     else:
-                                        waiting = True
-                                        wait_start = pygame.time.get_ticks()
-                                        if game_mode == "multi":
-                                            current_player = 3 - current_player
-                elif game_over:
-                    restart_rect = restart_surface.get_rect(center=(width // 2, height // 2 + 100))
-                    menu_rect = menu_surface.get_rect(center=(width // 2, height // 2 + 200))
-                    if restart_rect.collidepoint(mouse_x, mouse_y):
-                        cards, rows, cols, card_size, card_margin, grid_x, grid_y = init_game(difficulties[difficulty])
-                        player1_score, player2_score = 0, 0
-                        player1_moves, player2_moves = 0, 0
-                        current_player = 1
-                        matches_found = 0
-                        game_over = False
-                        first_card, second_card = None, None
-                        waiting = False
-                        game_initialized = True
-                        start_time = pygame.time.get_ticks()
-                    elif menu_rect.collidepoint(mouse_x, mouse_y):
-                        menu = True
-                        difficulty = None
-                        game_mode = "multi"
-                        game_initialized = False
-                        cards = []
-                        player1_score, player2_score = 0, 0
-                        player1_moves, player2_moves = 0, 0
-                        matches_found = 0
-                        game_over = False
-                        current_player = 1
-                        start_time = 0
-                        for btn in buttons:
-                            btn["color"] = GRAY if btn.get("mode") or btn.get("difficulty") else YELLOW
+                                        waiting=True
+                                        wait_start=pygame.time.get_ticks()
+                                        if game_mode=="multi":
+                                            current=3-current
 
-        # Hover effect
-        hover_button = None
-        restart_hover = False
-        menu_hover = False
-        if menu:
-            for button in buttons:
-                text_rect = button_surfaces[button["text"]].get_rect(center=(width // 2, button["y"]))
-                button_rect = text_rect.inflate(60, 40)
-                if button_rect.collidepoint(mouse_x, mouse_y):
-                    hover_button = button["text"]
-                    # Only apply hover effect if the button is not selected
-                    if button.get("action") in ["start", "exit"]:
-                        button["color"] = HOVER_YELLOW
-                    elif (button.get("mode") and button["mode"] != game_mode) or (button.get("difficulty") and button["difficulty"] != difficulty):
-                        button["color"] = HOVER_BLUE
-                    # Ensure selected buttons stay HOVER_YELLOW
-                    elif (button.get("mode") and button["mode"] == game_mode) or (button.get("difficulty") and button["difficulty"] == difficulty):
-                        button["color"] = HOVER_YELLOW
-                else:
-                    # Reset color for non-hovered buttons, keeping selected ones in HOVER_YELLOW
-                    if button.get("action") in ["start", "exit"]:
-                        button["color"] = YELLOW
-                    elif (button.get("mode") and button["mode"] == game_mode) or (button.get("difficulty") and button["difficulty"] == difficulty):
-                        button["color"] = HOVER_YELLOW
-                    else:
-                        button["color"] = GRAY
+        # Skrytie nesprávnych
+        if waiting and pygame.time.get_ticks()-wait_start>wait_ms:
+            cards[first]["revealed"]=False
+            cards[second]["revealed"]=False
+            first=second=None
+            waiting=False
+
+        # Animácia flip
+        for c in cards:
+            if c["revealed"] and c["flip_progress"]>0:
+                c["flip_progress"]=max(0,c["flip_progress"]-0.15)
+            elif not c["revealed"] and c["flip_progress"]<1:
+                c["flip_progress"]=min(1,c["flip_progress"]+0.15)
+
+        # Koniec hry
+        if game_started and matches==len(cards)//2 and not game_over:
+            game_over=True
+            if settings_data["sound"]: game_over_sound.play()
+            if game_mode=="multi":
+                if p1_score>p2_score:   winner="Víťaz: Hráč 1"
+                elif p2_score>p1_score: winner="Víťaz: Hráč 2"
+                else:                    winner="Remíza"
+            else:
+                winner=f"Získané páry: {p1_score}"
+
+        # --- VYKRESĽOVANIE ---
+        if settings_data["background_color"]:
+            screen.fill(settings_data["background_color"])
         else:
-            restart_rect = restart_surface.get_rect(center=(width // 2, height // 2 + 100))
-            menu_rect = menu_surface.get_rect(center=(width // 2, height // 2 + 200))
-            restart_hover = restart_rect.collidepoint(mouse_x, mouse_y)
-            menu_hover = menu_rect.collidepoint(mouse_x, mouse_y)
+            draw_gradient()
 
-        # Card flip animation
-        for card in cards:
-            if card['revealed'] and card['flip_progress'] > 0:
-                card['flip_progress'] = max(0, card['flip_progress'] - 0.15)
-            elif not card['revealed'] and card['flip_progress'] < 1:
-                card['flip_progress'] = min(1, card['flip_progress'] + 0.15)
+        if state!="game":
+            pygame.draw.circle(screen, btn_col, settings_circle_center, settings_circle_radius)
+            pygame.draw.circle(screen, DARK_GRAY,
+                               (settings_circle_center[0]+3, settings_circle_center[1]+3),
+                               settings_circle_radius)
+            screen.blit(settings_label_sh,(
+                settings_circle_center[0]+settings_circle_radius+10+3,
+                settings_circle_center[1]-settings_label.get_height()/2+3))
+            screen.blit(settings_label,(
+                settings_circle_center[0]+settings_circle_radius+10,
+                settings_circle_center[1]-settings_label.get_height()/2))
 
-        # Check waiting
-        if waiting and pygame.time.get_ticks() - wait_start > wait_time:
-            cards[first_card]['revealed'] = False
-            cards[second_card]['revealed'] = False
-            first_card, second_card = None, None
-            waiting = False
+        if state=="main":
+            screen.blit(title_shadow,(title_rect.x+5,title_rect.y+5))
+            screen.blit(title_surf,title_rect)
+            start_btn=draw_button("Štart",btn_col,center=(width//2,height//2),inflate=(200,50),pulse=pulse)
 
-        # Check win condition
-        if game_initialized and matches_found == len(cards) // 2 and not game_over:
-            game_over = True
+        elif state=="submenu":
+            screen.blit(title_shadow,(title_rect.x+5,title_rect.y+5))
+            screen.blit(title_surf,title_rect)
+            sub1=subtitle_font.render("POČET HRÁČOV",True,WHITE)
+            sub1s=subtitle_font.render("POČET HRÁČOV",True,DARK_GRAY)
+            r1=sub1.get_rect(center=(width//2,250))
+            screen.blit(sub1s,(r1.x+3,r1.y+3));screen.blit(sub1,r1)
+            sub2=subtitle_font.render("OBTIAŽNOSŤ",True,WHITE)
+            sub2s=subtitle_font.render("OBTIAŽNOSŤ",True,DARK_GRAY)
+            r2=sub2.get_rect(center=(width//2,450))
+            screen.blit(sub2s,(r2.x+3,r2.y+3));screen.blit(sub2,r2)
+            player_btns=[]
+            for i,txt in enumerate(["1 Hráč","2 Hráči"]):
+                x=width//2+(i*200-100)
+                col=btn_col if game_mode==["single","multi"][i] else DARK_GRAY
+                btn=draw_button(txt,col,center=(x,350),inflate=(150,50))
+                player_btns.append(btn)
+            diff_btns=[]
+            for i,txt in enumerate(["Ľahká","Stredná","Ťažká"]):
+                x=width//2+(i*200-200)
+                col=btn_col if difficulty==["easy","medium","hard"][i] else DARK_GRAY
+                btn=draw_button(txt,col,center=(x,530),inflate=(150,50))
+                diff_btns.append(btn)
+            play_btn=draw_button("HRAŤ",btn_col,center=(width//2,700),inflate=(150,50),pulse=pulse)
 
-        # Rendering
-        screen.blit(background_surface, (0, 0))
+        elif state=="settings":
+            screen.blit(title_shadow,(title_rect.x+5,title_rect.y+5))
+            screen.blit(title_surf,title_rect)
+            hdr=subtitle_font.render("NASTAVENIA",True,WHITE)
+            screen.blit(hdr,(width//2-hdr.get_width()//2,180))
+            bg_option_btns=[]
+            for i,(label,color_val) in enumerate(bg_options):
+                y=220+i*80
+                col=color_val if color_val is not None else DARK_GRAY
+                btn=draw_button(label,col,center=(width//2,y),inflate=(300,60))
+                bg_option_btns.append(btn)
+            sound_text="Zvuk: Zapnutý" if settings_data["sound"] else "Zvuk: Vypnutý"
+            sound_btn=draw_button(sound_text,btn_col,center=(width//2,220+len(bg_options)*80),inflate=(300,60))
+            # slider
+            pygame.draw.rect(screen,WHITE,slider_rect)
+            knob_x=slider_x+settings_data["volume"]*slider_w
+            knob_y=slider_y+slider_h//2
+            pygame.draw.circle(screen,btn_col,(int(knob_x),knob_y),knob_r)
+            back_btn=draw_button("Späť",btn_col,center=(width//2,height-100),inflate=(200,50))
 
-        if menu:
-            screen.blit(title_shadow, (title_rect.x + 5, title_rect.y + 5))
-            screen.blit(title_surface, title_rect)
-            for button in buttons:
-                text = button_surfaces[button["text"]]
-                text_rect = text.get_rect(center=(width // 2, button["y"]))
-                button_rect = text_rect.inflate(60 * pulse_scale, 40 * pulse_scale)
-                if hover_button == button["text"]:
-                    pygame.draw.rect(screen, GLOW_COLOR, button_rect.inflate(10, 10), 4, border_radius=15)
-                pygame.draw.rect(screen, DARK_GRAY, (button_rect.left + 5, button_rect.top + 5, button_rect.width, button_rect.height), border_radius=15)
-                pygame.draw.rect(screen, button["color"], button_rect, border_radius=15)
-                screen.blit(text, text_rect)
-        else:
+        else:  # game
             for i in range(rows):
                 for j in range(cols):
-                    card_index = i * cols + j
-                    card = cards[card_index]
-                    x = grid_x + j * (card_size + card_margin)
-                    y = grid_y + i * (card_size + card_margin)
-                    scale = 1 - 0.3 * abs(math.cos(math.pi * card['flip_progress']))
-                    surface = pygame.Surface((card_size, card_size), pygame.SRCALPHA)
-                    card_color = (
-                        int(BLACK[0] * card['flip_progress'] + BLUE[0] * (1 - card['flip_progress'])),
-                        int(BLACK[1] * card['flip_progress'] + BLUE[1] * (1 - card['flip_progress'])),
-                        int(BLACK[2] * card['flip_progress'] + BLUE[2] * (1 - card['flip_progress']))
-                    )
-                    pygame.draw.rect(surface, card_color if not card['matched'] else GRAY, (0, 0, card_size, card_size), border_radius=10)
-                    if card['flip_progress'] <= 0.5 and not card['matched']:
-                        text = card_surfaces.get(card['value'], info_font.render(card['value'], True, WHITE))
-                        text_rect = text.get_rect(center=(card_size // 2, card_size // 2))
-                        surface.blit(text, text_rect)
-                    scaled_surface = pygame.transform.smoothscale(surface, (int(card_size * scale), int(card_size * scale)))
-                    screen.blit(scaled_surface, (x + (card_size - scaled_surface.get_width()) // 2, y + (card_size - scaled_surface.get_height()) // 2))
-
-            # Info display
-            elapsed_time = (pygame.time.get_ticks() - start_time) // 1000 if game_initialized else 0
-            info_texts = [
-                f"Hráč {current_player} na rade" if game_mode == "multi" else "Hráč 1 na rade",
-                f"Hráč 1: {player1_score} (Ťahy: {player1_moves})",
-                f"Hráč 2: {player2_score} (Ťahy: {player2_moves})" if game_mode == "multi" else ""
-            ]
-            info_surface = pygame.Surface((310, 120 if game_mode == "single" else 160), pygame.SRCALPHA)
-            for r in range(200, 0, -5):
-                alpha = r / 200
-                color = (
-                    int(PASTEL_PURPLE[0] * alpha + PASTEL_PINK[0] * (1 - alpha)),
-                    int(PASTEL_PURPLE[1] * alpha + PASTEL_PINK[1] * (1 - alpha)),
-                    int(PASTEL_PURPLE[2] * alpha + PASTEL_PINK[2] * (1 - alpha))
-                )
-                pygame.draw.circle(info_surface, color, (155, 80), r)
-            screen.blit(info_surface, (5, 5))
-            for i, text in enumerate(info_texts):
-                if text:
-                    rendered = info_font.render(text, True, WHITE)
-                    screen.blit(rendered, (10, 10 + i * 40))
-            time_text = info_font.render(f"Čas: {elapsed_time}s", True, WHITE)
-            screen.blit(time_text, (10, 10 + (2 if game_mode == "single" else 3) * 40))
-
+                    idx=i*cols+j; c=cards[idx]
+                    x=gx+j*(size+margin); y=gy+i*(size+margin)
+                    t=c["flip_progress"]
+                    scale=1-0.3*abs(math.cos(math.pi*t))
+                    surf=pygame.Surface((size,size),pygame.SRCALPHA)
+                    fb,bb=card_front_col,card_back_col
+                    col=(int(fb[0]*t+bb[0]*(1-t)),int(fb[1]*t+bb[1]*(1-t)),int(fb[2]*t+bb[2]*(1-t)))
+                    draw_col=GRAY if c["matched"] else col
+                    pygame.draw.rect(surf,draw_col,(0,0,size,size),border_radius=10)
+                    if t<=0.5 and not c["matched"]:
+                        txt=card_surfs[c["value"]]; tr=txt.get_rect(center=(size//2,size//2))
+                        surf.blit(txt,tr)
+                    scaled=pygame.transform.smoothscale(surf,(int(size*scale),int(size*scale)))
+                    screen.blit(scaled,(
+                        x+(size-scaled.get_width())//2,
+                        y+(size-scaled.get_height())//2))
+            elapsed=(pygame.time.get_ticks()-start_time)//1000
+            screen.blit(info_font.render(f"Hráč {current} na rade",True,WHITE),(10,10))
+            screen.blit(info_font.render(f"Hráč 1: {p1_score} (Ťahy: {p1_moves})",True,WHITE),(10,50))
+            if game_mode=="multi":
+                screen.blit(info_font.render(f"Hráč 2: {p2_score} (Ťahy: {p2_moves})",True,WHITE),(10,90))
+                screen.blit(info_font.render(f"Čas: {elapsed}s",True,WHITE),(10,130))
+            else:
+                screen.blit(info_font.render(f"Čas: {elapsed}s",True,WHITE),(10,90))
             if game_over:
-                winner = "Hráč 1" if game_mode == "single" or player1_score > player2_score else "Hráč 2" if player2_score > player1_score else "Remíza"
-                text = title_font.render(f"Výhra! {winner}", True, WHITE)
-                text_rect = text.get_rect(center=(width // 2, height // 2))
-                pygame.draw.rect(screen, YELLOW, text_rect.inflate(50, 30), border_radius=15)
-                screen.blit(text, text_rect)
-                for text, y, hover, surface in [
-                    ("Reštart", height // 2 + 100, restart_hover, restart_surface),
-                    ("Menu", height // 2 + 200, menu_hover, menu_surface)
-                ]:
-                    text_rect = surface.get_rect(center=(width // 2, y))
-                    button_rect = text_rect.inflate(60 * pulse_scale, 40 * pulse_scale)
-                    if hover:
-                        pygame.draw.rect(screen, GLOW_COLOR, button_rect.inflate(10, 10), 4, border_radius=15)
-                    pygame.draw.rect(screen, DARK_GRAY, (button_rect.left + 5, button_rect.top + 5, button_rect.width, button_rect.height), border_radius=15)
-                    pygame.draw.rect(screen, HOVER_YELLOW if hover else YELLOW, button_rect, border_radius=15)
-                    screen.blit(surface, text_rect)
+                msg_surf=title_font.render(winner,True,WHITE)
+                msg_rect=msg_surf.get_rect(center=(width//2,height//2-50))
+                pygame.draw.rect(screen,btn_col,msg_rect.inflate(50,30),border_radius=15)
+                screen.blit(msg_surf,msg_rect)
+            menu_during_btn=draw_button("MENU",btn_col,corner=(width-20,height-20),inflate=(20,20),pulse=1.0)
 
         pygame.display.flip()
         clock.tick(FPS)
-        await asyncio.sleep(1.0 / FPS)
+        await asyncio.sleep(1/ FPS)
 
-if platform.system() == "Emscripten":
+if platform.system()=="Emscripten":
     asyncio.ensure_future(main())
 else:
     asyncio.run(main())
